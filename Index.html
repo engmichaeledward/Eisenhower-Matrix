@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Eisenhower Matrix (Google Sheets)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .matrix-grid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 1rem; height: 100%; }
+        .quadrant { border-radius: 0.5rem; padding: 1rem; overflow-y: auto; max-height: 100%; }
+        .q1 { background-color: #fee2e2; border: 1px solid #fecaca; }
+        .q2 { background-color: #e0f2fe; border: 1px solid #bae6fd; }
+        .q3 { background-color: #fef3c7; border: 1px solid #fde68a; }
+        .q4 { background-color: #f3f4f6; border: 1px solid #e5e7eb; }
+        .task-card { border-radius: 0.375rem; background-color: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 0.75rem; transition: transform 0.2s; padding: 0.75rem; }
+        .task-card:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .status-badge { font-size: 0.75rem; padding: 0.125rem 0.5rem; border-radius: 9999px; }
+        .status-todo { background-color: #e5e7eb; color: #4b5563; }
+        .status-progress { background-color: #dbeafe; color: #2563eb; }
+        .status-done { background-color: #d1fae5; color: #059669; }
+        .tab-active { border-bottom: 2px solid #3b82f6; color: #3b82f6; }
+        .health-indicator { padding: 0.5rem 1rem; border-radius: 0.375rem; font-weight: 500; }
+        .health-healthy { background-color: #d1fae5; color: #065f46; }
+        .health-warning { background-color: #fef3c7; color: #92400e; }
+        .health-alert { background-color: #fee2e2; color: #b91c1c; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a1a1a1; }
+    </style>
+</head>
+<body>
+    <div class="min-h-screen flex flex-col">
+        <header class="bg-white shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+                <div class="flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                    </svg>
+                    <h1 class="ml-2 text-xl font-semibold text-gray-800">Eisenhower Matrix</h1>
+                </div>
+                <div>
+                    <button id="add-task-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md flex items-center transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                          <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd"/>
+                        </svg>
+                        Add Task
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div class="border-b border-gray-200 mb-6">
+                <nav class="flex space-x-8">
+                    <button id="tab-matrix" class="tab-active py-4 px-1 font-medium text-sm">Matrix View</button>
+                    <button id="tab-list" class="text-gray-500 hover:text-gray-700 py-4 px-1 font-medium text-sm">List View</button>
+                    <button id="tab-dashboard" class="text-gray-500 hover:text-gray-700 py-4 px-1 font-medium text-sm">Dashboard</button>
+                </nav>
+            </div>
+
+            <!-- Matrix -->
+            <div id="view-matrix" class="h-[calc(100vh-12rem)]">
+                <div class="matrix-grid h-full">
+                    <div class="quadrant q1">
+                        <h2 class="font-semibold mb-3 text-red-800">Q1: Urgent & Important (Do First)</h2>
+                        <div id="q1-tasks" class="task-list"></div>
+                    </div>
+                    <div class="quadrant q2">
+                        <h2 class="font-semibold mb-3 text-blue-800">Q2: Important, Not Urgent (Schedule)</h2>
+                        <div id="q2-tasks" class="task-list"></div>
+                    </div>
+                    <div class="quadrant q3">
+                        <h2 class="font-semibold mb-3 text-amber-800">Q3: Urgent, Not Important (Delegate)</h2>
+                        <div id="q3-tasks" class="task-list"></div>
+                    </div>
+                    <div class="quadrant q4">
+                        <h2 class="font-semibold mb-3 text-gray-800">Q4: Not Urgent, Not Important (Eliminate)</h2>
+                        <div id="q4-tasks" class="task-list"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- List -->
+            <div id="view-list" class="hidden">
+                <div class="bg-white rounded-lg shadow mb-6 p-4">
+                    <div class="flex flex-wrap gap-4 items-end">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Date Range</label>
+                            <div class="flex items-center space-x-2">
+                                <input type="date" id="filter-date-start" class="rounded-md border-gray-300 shadow-sm sm:text-sm">
+                                <span>to</span>
+                                <input type="date" id="filter-date-end" class="rounded-md border-gray-300 shadow-sm sm:text-sm">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                            <select id="filter-status" class="rounded-md border-gray-300 shadow-sm sm:text-sm">
+                                <option value="">All</option>
+                                <option value="To Do">To Do</option>
+                                <option value="In Progress">In Progress</option>
+                                <option value="Done">Done</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Quadrant</label>
+                            <select id="filter-quadrant" class="rounded-md border-gray-300 shadow-sm sm:text-sm">
+                                <option value="">All</option>
+                                <option value="Q1">Q1: Urgent & Important</option>
+                                <option value="Q2">Q2: Important, Not Urgent</option>
+                                <option value="Q3">Q3: Urgent, Not Important</option>
+                                <option value="Q4">Q4: Not Urgent, Not Important</option>
+                            </select>
+                        </div>
+                        <button id="filter-apply" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md">Apply Filters</button>
+                        <button id="filter-clear" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-md">Clear</button>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg shadow overflow-hidden">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Task</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Due Date</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quadrant</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="task-table-body" class="bg-white divide-y divide-gray-200"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Dashboard -->
+            <div id="view-dashboard" class="hidden">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="bg-white rounded-lg shadow p-6 col-span-2">
+                        <h2 class="text-lg font-semibold mb-4">Task Distribution</h2>
+                        <div class="h-80">
+                            <canvas id="distribution-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h2 class="text-lg font-semibold mb-4">Productivity Health</h2>
+                        <div id="health-status" class="mb-6"></div>
+                        <div class="space-y-4">
+                            <div>
+                                <h3 class="text-sm font-medium text-gray-500">Total Tasks</h3>
+                                <p id="total-tasks" class="text-2xl font-semibold">0</p>
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-medium text-gray-500">Completed Tasks</h3>
+                                <p id="completed-tasks" class="text-2xl font-semibold">0</p>
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-medium text-gray-500">Completion Rate</h3>
+                                <p id="completion-rate" class="text-2xl font-semibold">0%</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow p-6 col-span-2">
+                        <h2 class="text-lg font-semibold mb-4">Task Status</h2>
+                        <div class="h-80">
+                            <canvas id="status-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h2 class="text-lg font-semibold mb-4">Weekly Report</h2>
+                        <p class="text-gray-600 mb-4">Generate a report of your tasks and productivity metrics for the selected week.</p>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Select Week</label>
+                            <input type="week" id="report-week" class="w-full rounded-md border-gray-300 shadow-sm sm:text-sm">
+                        </div>
+                        <button id="export-report" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+                            </svg>
+                            Export Report
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Task modal -->
+    <div id="task-modal" class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 overflow-hidden">
+            <div class="px-6 py-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+                <h3 id="modal-title" class="text-lg font-medium text-gray-900">Add New Task</h3>
+                <button id="close-modal" class="text-gray-400 hover:text-gray-500">
+                    <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <form id="task-form" class="px-6 py-4">
+                <input type="hidden" id="task-id">
+                <div class="mb-4">
+                    <label for="task-title" class="block text-sm font-medium text-gray-700 mb-1">Task Title</label>
+                    <input type="text" id="task-title" class="w-full rounded-md border-gray-300 shadow-sm sm:text-sm" required>
+                </div>
+                <div class="mb-4">
+                    <label for="task-description" class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <textarea id="task-description" rows="3" class="w-full rounded-md border-gray-300 shadow-sm sm:text-sm"></textarea>
+                </div>
+                <div class="mb-4">
+                    <label for="task-due-date" class="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+                    <input type="date" id="task-due-date" class="w-full rounded-md border-gray-300 shadow-sm sm:text-sm" required>
+                </div>
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Urgency</label>
+                        <div class="flex space-x-4">
+                            <label class="inline-flex items-center"><input type="radio" name="urgency" value="yes" required> <span class="ml-2">Yes</span></label>
+                            <label class="inline-flex items-center"><input type="radio" name="urgency" value="no"> <span class="ml-2">No</span></label>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Importance</label>
+                        <div class="flex space-x-4">
+                            <label class="inline-flex items-center"><input type="radio" name="importance" value="yes" required> <span class="ml-2">Yes</span></label>
+                            <label class="inline-flex items-center"><input type="radio" name="importance" value="no"> <span class="ml-2">No</span></label>
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label for="task-status" class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                    <select id="task-status" class="w-full rounded-md border-gray-300 shadow-sm sm:text-sm">
+                        <option value="To Do">To Do</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Done">Done</option>
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label class="flex items-center"><input type="checkbox" id="task-reminder" class="h-4 w-4"> <span class="ml-2 text-sm text-gray-700">Set reminder for this task</span></label>
+                </div>
+                <div class="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+                    <button type="button" id="cancel-task" class="bg-white py-2 px-4 border border-gray-300 rounded-md text-sm">Cancel</button>
+                    <button type="submit" class="bg-blue-600 py-2 px-4 rounded-md text-sm text-white">Save Task</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Details modal -->
+    <div id="details-modal" class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 overflow-hidden">
+            <div class="px-6 py-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+                <h3 id="details-title" class="text-lg font-medium text-gray-900">Task Details</h3>
+                <button id="close-details" class="text-gray-400 hover:text-gray-500">
+                    <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="px-6 py-4">
+                <div class="mb-4">
+                    <span id="details-quadrant" class="inline-block px-2 py-1 text-xs font-semibold rounded-full mb-2"></span>
+                    <h4 id="details-task-title" class="text-xl font-semibold mb-1"></h4>
+                    <p id="details-due-date" class="text-sm text-gray-500"></p>
+                </div>
+                <div class="mb-4">
+                    <h5 class="text-sm font-medium text-gray-700 mb-1">Description</h5>
+                    <p id="details-description" class="text-gray-600"></p>
+                </div>
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div><h5 class="text-sm font-medium text-gray-700 mb-1">Urgency</h5><p id="details-urgency"></p></div>
+                    <div><h5 class="text-sm font-medium text-gray-700 mb-1">Importance</h5><p id="details-importance"></p></div>
+                </div>
+                <div class="mb-4"><h5 class="text-sm font-medium text-gray-700 mb-1">Status</h5><p id="details-status"></p></div>
+                <div class="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+                    <button id="delete-task" class="bg-red-50 py-2 px-4 border border-red-300 rounded-md text-sm text-red-700">Delete</button>
+                    <button id="edit-task" class="bg-blue-50 py-2 px-4 border border-blue-300 rounded-md text-sm text-blue-700">Edit</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification toast -->
+    <div id="notification" class="fixed bottom-4 right-4 bg-white rounded-lg shadow-lg p-4 transform translate-y-full opacity-0 transition-all duration-300 flex items-center max-w-sm">
+        <div id="notification-icon" class="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full mr-3"></div>
+        <div class="flex-grow">
+            <h4 id="notification-title" class="font-medium"></h4>
+            <p id="notification-message" class="text-sm text-gray-500"></p>
+        </div>
+        <button id="close-notification" class="ml-4 text-gray-400 hover:text-gray-500">
+            <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        </button>
+    </div>
+
+<script>
+/* ---------- CONFIG - put your Apps Script Web App URL here (already set) ---------- */
+const GOOGLE_SHEET_API = 'https://script.google.com/macros/s/AKfycbzLOy4Z_Rdh0z2miRNCb29ui7EP4dTMWkwP4nd6n3CEAXxNmqzcsQt3E5FVkQmBYDba/exec';
+/* --------------------------------------------------------------------------------- */
+
+document.addEventListener('DOMContentLoaded', async () => {
+    // global tasks
+    window.tasks = [];
+    window.distributionChart = null;
+    window.statusChart = null;
+
+    // UI refs
+    const taskModal = document.getElementById('task-modal');
+    const detailsModal = document.getElementById('details-modal');
+
+    // tabs
+    const tabMatrix = document.getElementById('tab-matrix');
+    const tabList = document.getElementById('tab-list');
+    const tabDashboard = document.getElementById('tab-dashboard');
+    const viewMatrix = document.getElementById('view-matrix');
+    const viewList = document.getElementById('view-list');
+    const viewDashboard = document.getElementById('view-dashboard');
+
+    // events
+    tabMatrix.addEventListener('click', () => switchTab('matrix'));
+    tabList.addEventListener('click', () => switchTab('list'));
+    tabDashboard.addEventListener('click', () => switchTab('dashboard'));
+    document.getElementById('add-task-btn').addEventListener('click', () => openTaskModal());
+    document.getElementById('close-modal').addEventListener('click', () => taskModal.classList.add('hidden'));
+    document.getElementById('cancel-task').addEventListener('click', () => taskModal.classList.add('hidden'));
+    document.getElementById('close-details').addEventListener('click', () => detailsModal.classList.add('hidden'));
+    document.getElementById('task-form').addEventListener('submit', e => { e.preventDefault(); saveTask(); });
+    document.getElementById('edit-task').addEventListener('click', () => {
+        const taskId = document.getElementById('details-title').dataset.taskId;
+        const task = window.tasks.find(t => t.id === taskId);
+        if (task) { detailsModal.classList.add('hidden'); openTaskModal(task); }
+    });
+    document.getElementById('delete-task').addEventListener('click', () => {
+        const taskId = document.getElementById('details-title').dataset.taskId;
+        deleteTask(taskId);
+        detailsModal.classList.add('hidden');
+    });
+    document.getElementById('filter-apply').addEventListener('click', () => renderListView());
+    document.getElementById('filter-clear').addEventListener('click', () => {
+        document.getElementById('filter-date-start').value = '';
+        document.getElementById('filter-date-end').value = '';
+        document.getElementById('filter-status').value = '';
+        document.getElementById('filter-quadrant').value = '';
+        renderListView();
+    });
+    document.getElementById('export-report').addEventListener('click', () => exportReport());
+    document.getElementById('close-notification').addEventListener('click', () => hideNotification());
+
+    // load tasks from Google Sheets
+    await loadTasks();
+    renderMatrixView();
+    checkReminders();
+
+    /* ---------- STORAGE using Google Sheets (Apps Script endpoint) ---------- */
+    async function loadTasks() {
+        try {
+            const res = await fetch(GOOGLE_SHEET_API);
+            if (!res.ok) throw new Error('Failed to fetch from Google Sheets API');
+            const data = await res.json();
+            window.tasks = (Array.isArray(data) ? data : []).map(r => normalizeRow(r));
+            if (window.tasks.length === 0) {
+                window.tasks = getSampleTasks();
+                await saveTasks();
+            }
+        } catch (err) {
+            console.error('loadTasks error:', err);
+            showNotification('Sync Error', 'Could not load tasks from Google Sheets. Using sample tasks.', 'error');
+            window.tasks = getSampleTasks();
+        }
+    }
+
+async function saveTasks() {
+    try {
+        const response = await fetch(GOOGLE_SHEET_API, {
+            method: 'POST',
+            body: JSON.stringify(tasks),
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!response.ok) {
+            const text = await response.text();
+            throw new Error(`HTTP ${response.status} - ${text}`);
+        }
+
+        const result = await response.json();
+        if (result.status !== 'success') {
+            throw new Error(`Google Sheets API Error: ${JSON.stringify(result)}`);
+        }
+
+        showNotification('Tasks Saved', 'Your tasks have been synced to Google Sheets.', 'success');
+    } 
+    catch (error) {
+        console.error('Save to Google Sheets failed:', error);
+        showNotification(
+            'Save Failed',
+            `Could not save tasks to Google Sheets. Error: ${error.message}`,
+            'error'
+        );
+    }
+}
+
+
+    function normalizeRow(row) {
+        return {
+            id: String(row.id || generateId()),
+            title: row.title || '',
+            description: row.description || '',
+            dueDate: row.dueDate || new Date().toISOString().split('T')[0],
+            status: row.status || 'To Do',
+            urgent: (row.urgent === true || row.urgent === 'true' || row.urgent === '1'),
+            important: (row.important === true || row.important === 'true' || row.important === '1'),
+            quadrant: row.quadrant || getQuadrant((row.urgent === true || row.urgent === 'true'), (row.important === true || row.important === 'true')),
+            createdAt: row.createdAt || new Date().toISOString(),
+            reminder: (row.reminder === true || row.reminder === 'true' || row.reminder === '1')
+        };
+    }
+    /* ----------------------------------------------------------------------- */
+
+    /* ----------------- App UI & logic ----------------- */
+    function openTaskModal(task = null) {
+        const modalTitle = document.getElementById('modal-title');
+        const taskIdInput = document.getElementById('task-id');
+        const taskTitleInput = document.getElementById('task-title');
+        const taskDescriptionInput = document.getElementById('task-description');
+        const taskDueDateInput = document.getElementById('task-due-date');
+        const taskStatusInput = document.getElementById('task-status');
+        const taskReminderInput = document.getElementById('task-reminder');
+        const urgencyRadios = document.getElementsByName('urgency');
+        const importanceRadios = document.getElementsByName('importance');
+
+        if (task) {
+            modalTitle.textContent = 'Edit Task';
+            taskIdInput.value = task.id;
+            taskTitleInput.value = task.title;
+            taskDescriptionInput.value = task.description || '';
+            taskDueDateInput.value = task.dueDate;
+            taskStatusInput.value = task.status;
+            taskReminderInput.checked = !!task.reminder;
+            Array.from(urgencyRadios).forEach(r => r.checked = (r.value === (task.urgent ? 'yes' : 'no')));
+            Array.from(importanceRadios).forEach(r => r.checked = (r.value === (task.important ? 'yes' : 'no')));
+        } else {
+            modalTitle.textContent = 'Add New Task';
+            taskIdInput.value = '';
+            taskTitleInput.value = '';
+            taskDescriptionInput.value = '';
+            taskDueDateInput.value = new Date().toISOString().split('T')[0];
+            taskStatusInput.value = 'To Do';
+            taskReminderInput.checked = false;
+            Array.from(urgencyRadios).forEach(r => r.checked = false);
+            Array.from(importanceRadios).forEach(r => r.checked = false);
+        }
+        taskModal.classList.remove('hidden');
+        taskTitleInput.focus();
+    }
+
+    function saveTask() {
+        const taskId = document.getElementById('task-id').value;
+        const taskTitle = document.getElementById('task-title').value;
+        const taskDescription = document.getElementById('task-description').value;
+        const taskDueDate = document.getElementById('task-due-date').value;
+        const taskStatus = document.getElementById('task-status').value;
+        const taskReminder = document.getElementById('task-reminder').checked;
+        const urgentValue = document.querySelector('input[name="urgency"]:checked').value === 'yes';
+        const importantValue = document.querySelector('input[name="importance"]:checked').value === 'yes';
+        const quadrant = getQuadrant(urgentValue, importantValue);
+
+        if (taskId) {
+            const index = window.tasks.findIndex(t => t.id === taskId);
+            if (index !== -1) {
+                window.tasks[index] = {
+                    ...window.tasks[index],
+                    title: taskTitle,
+                    description: taskDescription,
+                    dueDate: taskDueDate,
+                    status: taskStatus,
+                    urgent: urgentValue,
+                    important: importantValue,
+                    quadrant: quadrant,
+                    reminder: taskReminder
+                };
+                showNotification('Task Updated', 'Your task has been updated successfully.', 'success');
+            }
+        } else {
+            const newTask = {
+                id: generateId(),
+                title: taskTitle,
+                description: taskDescription,
+                dueDate: taskDueDate,
+                status: taskStatus,
+                urgent: urgentValue,
+                important: importantValue,
+                quadrant: quadrant,
+                createdAt: new Date().toISOString(),
+                reminder: taskReminder
+            };
+            window.tasks.push(newTask);
+            showNotification('Task Added', 'Your new task has been added successfully.', 'success');
+        }
+
+        saveTasks();
+        taskModal.classList.add('hidden');
+
+        if (!viewMatrix.classList.contains('hidden')) renderMatrixView();
+        else if (!viewList.classList.contains('hidden')) renderListView();
+        else if (!viewDashboard.classList.contains('hidden')) renderDashboard();
+    }
+
+    function deleteTask(taskId) {
+        const index = window.tasks.findIndex(t => t.id === taskId);
+        if (index !== -1) {
+            window.tasks.splice(index, 1);
+            saveTasks();
+            if (!viewMatrix.classList.contains('hidden')) renderMatrixView();
+            else if (!viewList.classList.contains('hidden')) renderListView();
+            else if (!viewDashboard.classList.contains('hidden')) renderDashboard();
+            showNotification('Task Deleted', 'The task has been deleted successfully.', 'info');
+        }
+    }
+
+    function renderMatrixView() {
+        const q1Tasks = document.getElementById('q1-tasks');
+        const q2Tasks = document.getElementById('q2-tasks');
+        const q3Tasks = document.getElementById('q3-tasks');
+        const q4Tasks = document.getElementById('q4-tasks');
+        q1Tasks.innerHTML = '';
+        q2Tasks.innerHTML = '';
+        q3Tasks.innerHTML = '';
+        q4Tasks.innerHTML = '';
+
+        const tasksByQuadrant = {
+            Q1: window.tasks.filter(t => t.quadrant === 'Q1'),
+            Q2: window.tasks.filter(t => t.quadrant === 'Q2'),
+            Q3: window.tasks.filter(t => t.quadrant === 'Q3'),
+            Q4: window.tasks.filter(t => t.quadrant === 'Q4')
+        };
+
+        Object.keys(tasksByQuadrant).forEach(q => tasksByQuadrant[q].sort((a,b)=> new Date(a.dueDate)-new Date(b.dueDate)));
+
+        renderTaskCards(tasksByQuadrant.Q1, q1Tasks);
+        renderTaskCards(tasksByQuadrant.Q2, q2Tasks);
+        renderTaskCards(tasksByQuadrant.Q3, q3Tasks);
+        renderTaskCards(tasksByQuadrant.Q4, q4Tasks);
+    }
+
+    function renderTaskCards(tasksArray, container) {
+        if (!tasksArray || tasksArray.length === 0) {
+            const emptyState = document.createElement('div');
+            emptyState.className = 'text-center py-4 text-gray-500 italic text-sm';
+            emptyState.textContent = 'No tasks in this quadrant';
+            container.appendChild(emptyState);
+            return;
+        }
+        tasksArray.forEach(task => {
+            const card = document.createElement('div');
+            card.className = 'task-card';
+            card.dataset.taskId = task.id;
+
+            const dueDate = new Date(task.dueDate);
+            const today = new Date(); today.setHours(0,0,0,0);
+            let dueDateClass = '', dueDateText = '';
+            if (dueDate < today) { dueDateClass = 'text-red-600'; dueDateText = `Overdue: ${formatDate(task.dueDate)}`; }
+            else if (dueDate.getTime() === today.getTime()) { dueDateClass = 'text-amber-600'; dueDateText = 'Due Today'; }
+            else { const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate()+1); if (dueDate.getTime() === tomorrow.getTime()) { dueDateClass='text-blue-600'; dueDateText='Due Tomorrow'; } else dueDateText = `Due: ${formatDate(task.dueDate)}`; }
+
+            let statusClass = '';
+            switch(task.status) { case 'To Do': statusClass='status-badge status-todo'; break; case 'In Progress': statusClass='status-badge status-progress'; break; case 'Done': statusClass='status-badge status-done'; break; }
+
+            card.innerHTML = `
+                <div class="flex justify-between items-start mb-2">
+                    <h3 class="font-medium text-gray-900">${escapeHtml(task.title)}</h3>
+                    <span class="${statusClass}">${escapeHtml(task.status)}</span>
+                </div>
+                <p class="text-sm text-gray-500 mb-2 line-clamp-2">${escapeHtml(task.description || 'No description')}</p>
+                <div class="flex justify-between items-center">
+                    <span class="text-xs ${dueDateClass}">${dueDateText}</span>
+                    <button class="text-blue-600 hover:text-blue-800 text-sm font-medium">View</button>
+                </div>
+            `;
+            card.addEventListener('click', () => openTaskDetails(task));
+            container.appendChild(card);
+        });
+    }
+
+    function renderListView() {
+        const tableBody = document.getElementById('task-table-body');
+        tableBody.innerHTML = '';
+        const startDate = document.getElementById('filter-date-start').value;
+        const endDate = document.getElementById('filter-date-end').value;
+        const statusFilter = document.getElementById('filter-status').value;
+        const quadrantFilter = document.getElementById('filter-quadrant').value;
+
+        let filteredTasks = [...window.tasks];
+        if (startDate) filteredTasks = filteredTasks.filter(t => t.dueDate >= startDate);
+        if (endDate) filteredTasks = filteredTasks.filter(t => t.dueDate <= endDate);
+        if (statusFilter) filteredTasks = filteredTasks.filter(t => t.status === statusFilter);
+        if (quadrantFilter) filteredTasks = filteredTasks.filter(t => t.quadrant === quadrantFilter);
+        filteredTasks.sort((a,b) => new Date(a.dueDate) - new Date(b.dueDate));
+
+        if (filteredTasks.length === 0) {
+            const emptyRow = document.createElement('tr');
+            emptyRow.innerHTML = `<td colspan="5" class="px-6 py-4 text-center text-gray-500 italic">No tasks match your filters</td>`;
+            tableBody.appendChild(emptyRow);
+            return;
+        }
+
+        filteredTasks.forEach(task => {
+            let statusClass = '';
+            switch(task.status) { case 'To Do': statusClass='bg-gray-100 text-gray-800'; break; case 'In Progress': statusClass='bg-blue-100 text-blue-800'; break; case 'Done': statusClass='bg-green-100 text-green-800'; break; }
+            let quadrantClass = '';
+            switch(task.quadrant) { case 'Q1': quadrantClass='bg-red-100 text-red-800'; break; case 'Q2': quadrantClass='bg-blue-100 text-blue-800'; break; case 'Q3': quadrantClass='bg-amber-100 text-amber-800'; break; case 'Q4': quadrantClass='bg-gray-100 text-gray-800'; break; }
+            let quadrantText = '';
+            switch(task.quadrant) { case 'Q1': quadrantText='Q1: Urgent & Important'; break; case 'Q2': quadrantText='Q2: Important, Not Urgent'; break; case 'Q3': quadrantText='Q3: Urgent, Not Important'; break; case 'Q4': quadrantText='Q4: Not Urgent, Not Important'; break; }
+
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="flex items-center">
+                        <div>
+                            <div class="text-sm font-medium text-gray-900">${escapeHtml(task.title)}</div>
+                            <div class="text-sm text-gray-500 truncate max-w-xs">${escapeHtml(task.description || 'No description')}</div>
+                        </div>
+                    </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap"><div class="text-sm text-gray-900">${formatDate(task.dueDate)}</div></td>
+                <td class="px-6 py-4 whitespace-nowrap"><span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${quadrantClass}">${quadrantText}</span></td>
+                <td class="px-6 py-4 whitespace-nowrap"><span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClass}">${escapeHtml(task.status)}</span></td>
+                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <button class="text-blue-600 hover:text-blue-900 mr-3 view-task">View</button>
+                    <button class="text-indigo-600 hover:text-indigo-900 mr-3 edit-task">Edit</button>
+                    <button class="text-red-600 hover:text-red-900 delete-task">Delete</button>
+                </td>
+            `;
+            row.querySelector('.view-task').addEventListener('click', () => openTaskDetails(task));
+            row.querySelector('.edit-task').addEventListener('click', () => openTaskModal(task));
+            row.querySelector('.delete-task').addEventListener('click', () => { if (confirm('Are you sure you want to delete this task?')) deleteTask(task.id); });
+            tableBody.appendChild(row);
+        });
+    }
+
+    function renderDashboard() {
+        updateHealthStatus();
+        updateTaskStats();
+        renderCharts();
+    }
+
+    function updateHealthStatus() {
+        const healthStatus = document.getElementById('health-status');
+        const totalTasks = window.tasks.length;
+        if (totalTasks === 0) {
+            healthStatus.innerHTML = `<div class="health-indicator bg-gray-100 text-gray-700"><p class="font-medium">No tasks yet</p><p class="text-sm">Add tasks to see your productivity health.</p></div>`;
+            return;
+        }
+        const q1 = window.tasks.filter(t=>t.quadrant==='Q1').length;
+        const q2 = window.tasks.filter(t=>t.quadrant==='Q2').length;
+        const q3 = window.tasks.filter(t=>t.quadrant==='Q3').length;
+        const q4 = window.tasks.filter(t=>t.quadrant==='Q4').length;
+        const q1p = (q1/totalTasks)*100, q2p=(q2/totalTasks)*100, q3p=(q3/totalTasks)*100, q4p=(q4/totalTasks)*100;
+        let cls='', title='', msg='';
+        if (q2p>60) { cls='health-healthy'; title='Healthy Distribution'; msg="Great job! You're focusing on important but not urgent tasks."; }
+        else if (q1p>40) { cls='health-warning'; title='Too Many Urgent Tasks'; msg='You have too many urgent and important tasks.'; }
+        else if (q4p>30) { cls='health-alert'; title='Too Much Time on Unimportant Things'; msg="You're spending too much time on tasks that are neither urgent nor important."; }
+        else if (q3p>30) { cls='health-warning'; title='Too Many Distractions'; msg='Consider delegating or minimizing urgent but unimportant tasks.'; }
+        else { cls='health-healthy'; title='Balanced Distribution'; msg='Your task distribution looks balanced.'; }
+        healthStatus.innerHTML = `<div class="health-indicator ${cls}"><p class="font-medium">${title}</p><p class="text-sm">${msg}</p></div>`;
+    }
+
+    function updateTaskStats() {
+        document.getElementById('total-tasks').textContent = window.tasks.length;
+        document.getElementById('completed-tasks').textContent = window.tasks.filter(t=>t.status==='Done').length;
+        const total = window.tasks.length;
+        const done = window.tasks.filter(t=>t.status==='Done').length;
+        document.getElementById('completion-rate').textContent = total>0 ? Math.round((done/total)*100)+'%' : '0%';
+    }
+
+    function renderCharts() {
+        const distCtx = document.getElementById('distribution-chart').getContext('2d');
+        const statCtx = document.getElementById('status-chart').getContext('2d');
+        const q1 = window.tasks.filter(t=>t.quadrant==='Q1').length;
+        const q2 = window.tasks.filter(t=>t.quadrant==='Q2').length;
+        const q3 = window.tasks.filter(t=>t.quadrant==='Q3').length;
+        const q4 = window.tasks.filter(t=>t.quadrant==='Q4').length;
+        const todo = window.tasks.filter(t=>t.status==='To Do').length;
+        const inProgress = window.tasks.filter(t=>t.status==='In Progress').length;
+        const done = window.tasks.filter(t=>t.status==='Done').length;
+        if (window.distributionChart) window.distributionChart.destroy();
+        if (window.statusChart) window.statusChart.destroy();
+        window.distributionChart = new Chart(distCtx, {
+            type: 'pie',
+            data: { labels:['Q1','Q2','Q3','Q4'], datasets:[{ data:[q1,q2,q3,q4], backgroundColor:['#ef4444','#3b82f6','#f59e0b','#9ca3af'] }]},
+            options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom' } } }
+        });
+        window.statusChart = new Chart(statCtx, {
+            type:'bar',
+            data:{ labels:['To Do','In Progress','Done'], datasets:[{ label:'Tasks', data:[todo,inProgress,done], backgroundColor:['#e5e7eb','#93c5fd','#6ee7b7'] }]},
+            options:{ responsive:true, maintainAspectRatio:false, scales:{ y:{ beginAtZero:true, ticks:{ precision:0 } } }, plugins:{ legend:{ display:false } } }
+        });
+    }
+
+    function openTaskDetails(task) {
+        document.getElementById('details-title').dataset.taskId = task.id;
+        document.getElementById('details-task-title').textContent = task.title;
+        document.getElementById('details-due-date').textContent = `Due: ${formatDate(task.dueDate)}`;
+        document.getElementById('details-description').textContent = task.description || 'No description provided';
+        document.getElementById('details-urgency').textContent = task.urgent ? 'Yes' : 'No';
+        document.getElementById('details-importance').textContent = task.important ? 'Yes' : 'No';
+        document.getElementById('details-status').textContent = task.status;
+        const detailsQuadrant = document.getElementById('details-quadrant');
+        let cls='', txt='';
+        switch(task.quadrant){ case 'Q1': cls='bg-red-100 text-red-800'; txt='Q1: Urgent & Important'; break; case 'Q2': cls='bg-blue-100 text-blue-800'; txt='Q2: Important, Not Urgent'; break; case 'Q3': cls='bg-amber-100 text-amber-800'; txt='Q3: Urgent, Not Important'; break; default: cls='bg-gray-100 text-gray-800'; txt='Q4: Not Urgent, Not Important'; }
+        detailsQuadrant.className = cls;
+        detailsQuadrant.textContent = txt;
+        detailsModal.classList.remove('hidden');
+    }
+
+    function exportReport() {
+        const weekInput = document.getElementById('report-week').value;
+        if (!weekInput) { showNotification('Select a Week', 'Please select a week to generate the report.', 'warning'); return; }
+        const year = parseInt(weekInput.substring(0,4));
+        const week = parseInt(weekInput.substring(6,8));
+        const startDate = getDateOfISOWeek(week, year);
+        const endDate = new Date(startDate); endDate.setDate(startDate.getDate()+6);
+        const weekTasks = window.tasks.filter(t => { const d = new Date(t.dueDate); return d >= startDate && d <= endDate; });
+
+        const total = weekTasks.length;
+        const done = weekTasks.filter(t=>t.status==='Done').length;
+        const inProgress = weekTasks.filter(t=>t.status==='In Progress').length;
+        const todo = weekTasks.filter(t=>t.status==='To Do').length;
+        const q1 = weekTasks.filter(t=>t.quadrant==='Q1').length;
+        const q2 = weekTasks.filter(t=>t.quadrant==='Q2').length;
+        const q3 = weekTasks.filter(t=>t.quadrant==='Q3').length;
+        const q4 = weekTasks.filter(t=>t.quadrant==='Q4').length;
+
+        const reportHTML = `
+            <html>
+            <head>
+                <title>Weekly Productivity Report</title>
+                <meta charset="utf-8" />
+                <style>
+                    body{font-family:Arial,Helvetica,sans-serif;margin:20px;background:#f8fafc;color:#0f172a}
+                    h1{color:#1e3a8a} table{width:100%;border-collapse:collapse;margin-top:15px}
+                    th,td{border:1px solid #ddd;padding:8px;text-align:left}
+                    th{background:#3b82f6;color:#fff}
+                    tr:nth-child(even){background:#f1f5f9}
+                    .summary{margin:10px 0;padding:10px;background:#e0f2fe;border-radius:8px}
+                </style>
+            </head>
+            <body>
+                <h1>Weekly Productivity Report</h1>
+                <p><strong>Week:</strong> ${escapeHtml(weekInput)}</p>
+                <p><strong>Date Range:</strong> ${formatDate(startDate)} to ${formatDate(endDate)}</p>
+
+                <div class="summary">
+                    <h2>Summary</h2>
+                    <p>Total Tasks: ${total}</p>
+                    <p>Completed: ${done} | In Progress: ${inProgress} | To Do: ${todo}</p>
+                </div>
+
+                <div class="summary">
+                    <h2>Eisenhower Matrix Distribution</h2>
+                    <p>Q1 (Urgent & Important): ${q1}</p>
+                    <p>Q2 (Important, Not Urgent): ${q2}</p>
+                    <p>Q3 (Urgent, Not Important): ${q3}</p>
+                    <p>Q4 (Not Urgent, Not Important): ${q4}</p>
+                </div>
+
+                <h2>Tasks</h2>
+                <table>
+                    <tr><th>Title</th><th>Quadrant</th><th>Status</th><th>Due Date</th><th>Description</th></tr>
+                    ${weekTasks.map(t => `
+                        <tr>
+                            <td>${escapeHtml(t.title)}</td>
+                            <td>${escapeHtml(t.quadrant)}</td>
+                            <td>${escapeHtml(t.status)}</td>
+                            <td>${formatDate(t.dueDate)}</td>
+                            <td>${escapeHtml(t.description || '')}</td>
+                        </tr>
+                    `).join('')}
+                </table>
+            </body>
+            </html>
+        `;
+
+        const blob = new Blob([reportHTML], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        showNotification('Report Generated', 'Your weekly report has been opened in a new tab.', 'success');
+    }
+
+    function checkReminders() {
+        const today = new Date(); today.setHours(0,0,0,0);
+        const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate()+1);
+        const reminderTasks = window.tasks.filter(task => {
+            if (!task.reminder) return false;
+            if (task.status === 'Done') return false;
+            const d = new Date(task.dueDate); d.setHours(0,0,0,0);
+            return (d.getTime() === today.getTime() || d.getTime() === tomorrow.getTime()) && (task.quadrant === 'Q1' || task.quadrant === 'Q2');
+        });
+        if (reminderTasks.length > 0) {
+            const todayTasks = reminderTasks.filter(t => { const d=new Date(t.dueDate); d.setHours(0,0,0,0); return d.getTime() === today.getTime(); });
+            const tomorrowTasks = reminderTasks.filter(t => { const d=new Date(t.dueDate); d.setHours(0,0,0,0); return d.getTime() === tomorrow.getTime(); });
+            if (todayTasks.length > 0) showNotification('Tasks Due Today', `You have ${todayTasks.length} important task${todayTasks.length>1?'s':''} due today.`, 'warning');
+            else if (tomorrowTasks.length > 0) showNotification('Tasks Due Tomorrow', `You have ${tomorrowTasks.length} important task${tomorrowTasks.length>1?'s':''} due tomorrow.`, 'info');
+        }
+    }
+
+    /* ----------------- Helpers ----------------- */
+    function getQuadrant(urgent, important) {
+        if (urgent && important) return 'Q1';
+        if (!urgent && important) return 'Q2';
+        if (urgent && !important) return 'Q3';
+        return 'Q4';
+    }
+    function formatDate(dateString) {
+        const d = new Date(dateString);
+        const opt = { year:'numeric', month:'short', day:'numeric' };
+        return d.toLocaleDateString(undefined, opt);
+    }
+    function generateId() {
+        return Date.now().toString(36) + Math.random().toString(36).substr(2,5);
+    }
+    function getDateOfISOWeek(week, year) {
+        const simple = new Date(year, 0, 1 + (week - 1) * 7);
+        const dayOfWeek = simple.getDay();
+        const ISOweekStart = new Date(simple);
+        if (dayOfWeek <= 4) ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
+        else ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
+        return ISOweekStart;
+    }
+    function escapeHtml(str) {
+        if (!str && str !== 0) return '';
+        return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+    }
+
+    function showNotification(title, message, type) {
+        const n = document.getElementById('notification');
+        const t = document.getElementById('notification-title');
+        const m = document.getElementById('notification-message');
+        const icon = document.getElementById('notification-icon');
+        t.textContent = title; m.textContent = message;
+        if (type === 'success') { icon.className='flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full mr-3 bg-green-100 text-green-500'; icon.innerHTML = '<svg class=\"h-5 w-5\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M5 13l4 4L19 7\"/></svg>'; }
+        else if (type === 'warning') { icon.className='flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full mr-3 bg-amber-100 text-amber-500'; icon.innerHTML = '<svg class=\"h-5 w-5\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z\"/></svg>'; }
+        else if (type === 'error') { icon.className='flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full mr-3 bg-red-100 text-red-500'; icon.innerHTML = '<svg class=\"h-5 w-5\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M6 18L18 6M6 6l12 12\"/></svg>'; }
+        else { icon.className='flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full mr-3 bg-blue-100 text-blue-500'; icon.innerHTML = '<svg class=\"h-5 w-5\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z\"/></svg>'; }
+        n.classList.remove('translate-y-full','opacity-0'); n.classList.add('translate-y-0','opacity-100');
+        setTimeout(() => { hideNotification(); }, 5000);
+    }
+    function hideNotification() {
+        const n = document.getElementById('notification');
+        n.classList.add('translate-y-full','opacity-0'); n.classList.remove('translate-y-0','opacity-100');
+    }
+
+    function switchTab(tab) {
+        [tabMatrix, tabList, tabDashboard].forEach(t => { t.classList.remove('tab-active'); t.classList.add('text-gray-500','hover:text-gray-700'); });
+        [viewMatrix, viewList, viewDashboard].forEach(v => v.classList.add('hidden'));
+        if (tab === 'matrix') { tabMatrix.classList.add('tab-active'); tabMatrix.classList.remove('text-gray-500','hover:text-gray-700'); viewMatrix.classList.remove('hidden'); renderMatrixView(); }
+        else if (tab === 'list') { tabList.classList.add('tab-active'); tabList.classList.remove('text-gray-500','hover:text-gray-700'); viewList.classList.remove('hidden'); renderListView(); }
+        else if (tab === 'dashboard') { tabDashboard.classList.add('tab-active'); tabDashboard.classList.remove('text-gray-500','hover:text-gray-700'); viewDashboard.classList.remove('hidden'); renderDashboard(); }
+    }
+
+    // Sample tasks used if sheet empty or fetch fails
+    function getSampleTasks() {
+        const today = new Date(); const todayStr = today.toISOString().split('T')[0];
+        const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate()+1); const tomorrowStr = tomorrow.toISOString().split('T')[0];
+        const nextWeek = new Date(today); nextWeek.setDate(nextWeek.getDate()+7); const nextWeekStr = nextWeek.toISOString().split('T')[0];
+        return [
+            { id:'sample1', title:'Complete project proposal', description:'Finish the draft and send it to the team for review', dueDate:todayStr, status:'In Progress', urgent:true, important:true, quadrant:'Q1', createdAt:new Date().toISOString(), reminder:true },
+            { id:'sample2', title:'Learn new programming language', description:'Start online course on JavaScript', dueDate:nextWeekStr, status:'To Do', urgent:false, important:true, quadrant:'Q2', createdAt:new Date().toISOString(), reminder:false },
+            { id:'sample3', title:'Reply to emails', description:'Clear inbox and respond to pending messages', dueDate:tomorrowStr, status:'To Do', urgent:true, important:false, quadrant:'Q3', createdAt:new Date().toISOString(), reminder:false },
+            { id:'sample4', title:'Browse social media', description:'Check updates on Twitter and LinkedIn', dueDate:nextWeekStr, status:'To Do', urgent:false, important:false, quadrant:'Q4', createdAt:new Date().toISOString(), reminder:false },
+            { id:'sample5', title:'Strategic planning session', description:'Prepare quarterly goals and objectives', dueDate:nextWeekStr, status:'To Do', urgent:false, important:true, quadrant:'Q2', createdAt:new Date().toISOString(), reminder:true }
+        ];
+    }
+});
+</script>
+</body>
+</html>
